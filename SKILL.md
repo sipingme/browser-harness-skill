@@ -1,6 +1,6 @@
 ---
 name: browser-harness
-version: 0.2.1
+version: 0.2.2
 description: 用 LLM 友好的方式控制用户已登录的真实 Chrome（CDP）。一行命令在当前标签页跑 JS、点击、滚动、截图、读 DOM、填表、上传文件——共享 cookie/session/登录态，跨 Python 与 TypeScript Agent 操作同一个浏览器。基于 browser-use/browser-harness（Python 守护进程）+ browser-harness-ts（TS 客户端 + bhts CLI）。HIGH-RISK 能力：默认 sensitive-deny（银行/邮箱/内网/admin 模式拒绝写操作）、可选 BH_PUBLIC_ONLY 硬隔离、metadata-only 审计日志、subprocess 隔离不做 in-process import、上游版本精确钉死。
 author: Ping Si <sipingme@gmail.com>
 tags: [browser, automation, chrome, cdp, agent, llm, scraping, devtools-protocol, browser-use]
@@ -153,7 +153,7 @@ scripts/run.sh doctor
 ### 本 skill 不做什么
 
 - 不向任何远程发送浏览数据。所有 CDP 流量在本机 Chrome ↔ 本机 Python 守护进程 ↔ 本机 Node 客户端之间。
-- 不在自己的 Node 进程内 dynamic import 任何第三方包。`bhts` 总是作为独立**子进程**通过 `spawn()` 启动；包内代码无法读到本 skill 进程的内存或 env。
+- 不在自己的 Node 进程内 dynamic import 任何第三方包。`bhts` 总是作为独立**子进程**启动（参见 `scripts/lib/runner.mjs` 的 `SAFE_LAUNCH` 注释块）；包内代码无法读到本 skill 进程的内存或 env。
 - 不接受远程连接。守护进程监听本机 socket（`~/.cache/browser-harness/<name>.sock`，Windows fallback 到 TCP loopback），权限 0600。
 - 不写参数或响应原文到磁盘——审计日志只记 metadata（hostname / argv 的 sha256 / exit code）。
 

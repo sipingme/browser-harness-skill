@@ -1,0 +1,21 @@
+# Skill 沉淀的本地知识不进 git（用户自己的站点 + helpers 应该单独管理）
+# 如果你想把自家站点知识进 git，把下行删掉
+agent-workspace/
+
+# OS / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Node（万一在 skill 目录跑过 npm）
+node_modules/
+npm-debug.log*
+
+# 临时文件
+*.png
+!docs/*.png
+*.tmp
+shot.png
+fullpage.png
+current.png

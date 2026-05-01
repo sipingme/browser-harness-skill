@@ -1,0 +1,183 @@
+{
+  "name": "browser-harness",
+  "version": "0.1.0",
+  "requiredEnvVars": [],
+  "requires": {
+    "runtime": {
+      "node": ">=20.6.0",
+      "python": ">=3.10"
+    },
+    "binaries": ["bhts", "browser-harness", "uv"],
+    "packages": {
+      "npm": ["browser-harness-ts"],
+      "pip": ["browser-harness"]
+    }
+  },
+  "skill": {
+    "name": "browser-harness",
+    "version": "0.1.0",
+    "enabled": true,
+    "autoInvoke": false
+  },
+  "commands": {
+    "setup": {
+      "script": "./scripts/run.sh",
+      "args": ["setup"],
+      "description": "一次性安装：bhts + browser-harness CLI 上 PATH，并引导 browser-harness --setup 接管 Chrome"
+    },
+    "doctor": {
+      "script": "./scripts/run.sh",
+      "args": ["doctor"],
+      "description": "体检：node/uv/bhts/browser-harness 版本、守护进程状态、当前标签信息"
+    },
+    "js": {
+      "script": "./scripts/run.sh",
+      "args": ["js"],
+      "description": "在当前标签页跑一段 JS 表达式，stdout 输出 JSON 序列化结果"
+    },
+    "exec": {
+      "script": "./scripts/run.sh",
+      "args": ["exec"],
+      "description": "执行任意 bh.* 调用序列（snippet 内 bh / h 可用，支持顶层 await）"
+    },
+    "shot": {
+      "script": "./scripts/run.sh",
+      "args": ["shot"],
+      "description": "截图当前标签视口（PNG）；--full 截整页"
+    },
+    "page": {
+      "script": "./scripts/run.sh",
+      "args": ["page"],
+      "description": "输出当前页 url/title/viewport/scroll/pageSize"
+    },
+    "tabs": {
+      "script": "./scripts/run.sh",
+      "args": ["tabs"],
+      "description": "列出真实标签（排除 chrome:// / devtools:// 等）"
+    },
+    "open": {
+      "script": "./scripts/run.sh",
+      "args": ["open"],
+      "description": "新建标签并导航到 URL（含 waitForLoad）"
+    },
+    "switch": {
+      "script": "./scripts/run.sh",
+      "args": ["switch"],
+      "description": "切换到 url 或 title 含关键词的那个标签"
+    },
+    "upload": {
+      "script": "./scripts/run.sh",
+      "args": ["upload"],
+      "description": "给 input[type=file] 设置文件（路径必须绝对）"
+    },
+    "click": {
+      "script": "./scripts/run.sh",
+      "args": ["click"],
+      "description": "在视口坐标点击；不推荐——优先用 js + querySelector"
+    },
+    "type": {
+      "script": "./scripts/run.sh",
+      "args": ["type"],
+      "description": "在当前焦点元素输入文本（IME 友好的 insertText）"
+    },
+    "key": {
+      "script": "./scripts/run.sh",
+      "args": ["key"],
+      "description": "按下单键（Enter / Tab / Escape / ArrowDown / ...）"
+    },
+    "scroll": {
+      "script": "./scripts/run.sh",
+      "args": ["scroll"],
+      "description": "滚动页面，传 dy（负值向上）"
+    },
+    "helpers": {
+      "script": "./scripts/run.sh",
+      "args": ["helpers"],
+      "description": "列出 agent-workspace/agent_helpers.ts 注册的自定义函数"
+    },
+    "raw": {
+      "script": "./scripts/run.sh",
+      "args": ["raw"],
+      "description": "直接转发到 bhts；用于 setup.md 没覆盖的高级用法"
+    },
+    "help": {
+      "script": "./scripts/run.sh",
+      "args": ["help"],
+      "description": "显示本 skill 所有子命令"
+    }
+  },
+  "environment": {
+    "required": [],
+    "optional": [
+      {
+        "name": "BU_NAME",
+        "description": "守护进程命名空间，多 Agent 并行时用（默认 default）"
+      },
+      {
+        "name": "BH_AGENT_WORKSPACE",
+        "description": "覆盖 agent-workspace 目录路径"
+      },
+      {
+        "name": "BH_TMP_DIR",
+        "description": "与 Python 端 socket 路径对齐时使用（隔离 tmpdir 场景）"
+      }
+    ]
+  },
+  "install": {
+    "type": "npm+pip",
+    "autoInstall": false,
+    "riskLevel": "high",
+    "riskReason": "本 skill 通过 CDP 接管用户当前 Chrome——可见所有登录态、cookie、saved password、邮件、银行页等。仅本机本地通信（无远程数据传输），但 Agent 操作风险极高，使用前必须用户授权。",
+    "requiresApproval": true,
+    "installCommand": "npm install -g browser-harness-ts && uv tool install browser-harness && browser-harness --setup"
+  },
+  "dependencies": {
+    "npm": ["browser-harness-ts"],
+    "pip": ["browser-harness"],
+    "binaries": ["uv"],
+    "note": "setup.sh 会指引安装。两端各自独立升级：`uv tool install --force browser-harness@latest` 升 Python 守护，`npm install -g browser-harness-ts@latest` 升 TS 客户端。"
+  },
+  "recommendedSkills": [],
+  "permissions": {
+    "filesystem": {
+      "read": [
+        "~/.cache/browser-harness/",
+        "agent-workspace/",
+        "<screenshot output paths provided by user>"
+      ],
+      "write": [
+        "agent-workspace/",
+        "<screenshot output paths provided by user>"
+      ]
+    },
+    "network": {
+      "domains": [
+        "127.0.0.1",
+        "<URL provided by user (any HTTP/HTTPS, since the skill controls a browser)>"
+      ],
+      "note": "本机进程间走 unix socket / TCP loopback；Chrome 自身的网络请求由用户在浏览器里发出，skill 不直接联网。"
+    }
+  },
+  "capabilities": {
+    "sensitive": [
+      {
+        "type": "browser-control",
+        "riskLevel": "high",
+        "description": "通过 CDP 接管用户当前正在使用的 Chrome 实例",
+        "risks": [
+          "Agent 可读写所有打开标签的 DOM（含已登录的银行、邮箱、内部系统）",
+          "Agent 可执行任意 JS、点击按钮、提交表单——动作可能不可撤回",
+          "截图 / 抓取的页面内容可能包含 PII / 商业机密",
+          "Agent 可在标签间切换、新开标签、上传任意文件"
+        ],
+        "mitigations": [
+          "本 skill 不向远程发送任何浏览数据，所有 IPC 在本机回环",
+          "默认 autoInvoke=false——必须用户明确触发",
+          "守护进程 socket 权限 0600，仅当前用户可见",
+          "敏感站点操作前必须显式确认用户授权",
+          "domain-skills 目录的 .gitignore 默认排除（不进 git，避免 cookie 等泄露）"
+        ]
+      }
+    ]
+  }
+}

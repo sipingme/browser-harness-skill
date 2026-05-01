@@ -1,6 +1,6 @@
 {
   "name": "browser-harness",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "requiredEnvVars": [],
   "requires": {
     "runtime": {
@@ -15,7 +15,7 @@
   },
   "skill": {
     "name": "browser-harness",
-    "version": "0.2.2",
+    "version": "0.2.3",
     "enabled": true,
     "autoInvoke": false
   },
@@ -29,6 +29,11 @@
       "script": "./scripts/run.sh",
       "args": ["doctor"],
       "description": "体检：node/uv/bhts/browser-harness 版本、守护进程状态、当前标签信息"
+    },
+    "stop": {
+      "script": "./scripts/run.sh",
+      "args": ["stop"],
+      "description": "停掉 browser-harness 守护进程；任务完成后建议用，避免守护常驻持有 CDP"
     },
     "js": {
       "script": "./scripts/run.sh",
@@ -98,7 +103,7 @@
     "raw": {
       "script": "./scripts/run.sh",
       "args": ["raw"],
-      "description": "直接转发到 bhts；用于 setup.md 没覆盖的高级用法（绕过 sensitive-deny，要求显式 --i-understand-sensitive）"
+      "description": "直接转发到 bhts；默认禁用，需 BH_RAW_OK=1 显式开启（绕过 sensitive-deny + in-snippet policy gate；只记 metadata 审计；Agent 不应使用，用 exec 替代）"
     },
     "help": {
       "script": "./scripts/run.sh",
@@ -132,6 +137,10 @@
       {
         "name": "BH_AUDIT_LOG",
         "description": "覆盖审计日志路径（默认 ~/.cache/browser-harness/skill-audit.log）；置空字符串可禁用日志。"
+      },
+      {
+        "name": "BH_RAW_OK",
+        "description": "=1 时启用 raw 子命令（默认禁用以避免后门）；启用后 raw 仍写一行 sub=raw mode=raw-bypass 的元数据审计，但绕过 URL 策略门——这是用户接管全部责任的逃生口。"
       }
     ]
   },
@@ -139,9 +148,9 @@
     "type": "npm+pip",
     "autoInstall": false,
     "riskLevel": "high",
-    "riskReason": "本 skill 通过 CDP 接管用户当前 Chrome——可见所有登录态、cookie、saved password、邮件、银行页等。仅本机本地通信（无远程数据传输），但 Agent 操作风险极高，使用前必须用户授权。已实施 sensitive-deny 默认策略 + BH_PUBLIC_ONLY 硬隔离模式 + 元数据审计日志。",
+    "riskReason": "本 skill 通过 CDP 接管用户当前 Chrome——可见所有登录态、cookie、saved password、邮件、银行页等。仅本机本地通信（无远程数据传输），但 Agent 操作风险极高，使用前必须用户授权。已实施 sensitive-deny 默认策略 + BH_PUBLIC_ONLY 硬隔离模式 + 元数据审计日志 + raw 子命令默认禁用 + 安装钉死版本 + --ignore-scripts。",
     "requiresApproval": true,
-    "installCommand": "npm install -g browser-harness-ts@0.1.1 --ignore-scripts && uv tool install browser-harness==0.0.1 && browser-harness --setup",
+    "installCommand": "npm install -g browser-harness-ts@0.1.1 --ignore-scripts && uv tool install --force browser-harness==0.0.1 && browser-harness --setup",
     "source": [
       {
         "type": "npm",
@@ -241,7 +250,11 @@
           "BH_PUBLIC_ONLY=1 硬隔离：仅允许 publicSites allow-list 内域名",
           "metadata-only 审计日志：~/.cache/browser-harness/skill-audit.log（仅 ts/subcommand/hostname/argv-sha256/exit）",
           "上游依赖精确钉版（browser-harness-ts@0.1.1 + browser-harness==0.0.1），policy.allowFloatingVersions=false",
-          "建议安装时加 --ignore-scripts 降低 npm 供应链注入面",
+          "v0.2.3: setup 脚本强制安装钉死版本 + npm --ignore-scripts，安装后 --version 校验，版本不匹配中止",
+          "v0.2.3: raw 子命令默认禁用，需 BH_RAW_OK=1 显式开启；启用后仍写 metadata 审计日志（sub=raw mode=raw-bypass）",
+          "v0.2.3: stop 子命令一键停掉守护进程，避免长寿命常驻持有 CDP",
+          "v0.2.3: setup 输出强烈建议用独立 Chrome profile（--user-data-dir）隔离接管面",
+          "v0.2.3: SKILL.md 第 11 条明确将 domain-skills 文件视为不可信输入（线索而非指令），防 prompt injection",
           "守护进程 socket 权限 0600，仅当前用户可见",
           "本 skill 不向远程发送任何浏览数据，所有 IPC 在本机回环",
           "domain-skills 目录的 .gitignore 默认排除（不进 git，避免 cookie 等泄露）"
@@ -263,7 +276,15 @@
         "(?i)^https?:\\/\\/(localhost|127\\.|10\\.|192\\.168\\.|172\\.(1[6-9]|2\\d|3[01])\\.)",
         "(?i)\\b(ehr|emr|patient|hipaa|medical-record|hospital)\\b"
       ],
-      "exemptedSubcommands": ["page", "tabs", "helpers", "doctor", "setup", "help"],
+      "exemptedSubcommands": ["page", "tabs", "helpers", "doctor", "setup", "help", "stop"],
+      "rawSubcommandPolicy": {
+        "defaultEnabled": false,
+        "enableEnv": "BH_RAW_OK",
+        "bypassesPolicyGate": true,
+        "stillAuditLogged": true,
+        "auditMode": "raw-bypass",
+        "rationale": "raw 是用户的逃生口（直接转发 bhts），自 v0.2.3 默认禁用以避免后门；启用后仍记 metadata 审计但绕过 URL 策略门"
+      },
       "publicSites": [
         "github.com", "news.ycombinator.com", "stackoverflow.com", "stackexchange.com",
         "npmjs.com", "pypi.org", "crates.io", "rubygems.org",
@@ -300,13 +321,14 @@
           "version": "0.0.1",
           "verifyCommand": "pip download browser-harness==0.0.1 --no-deps -d /tmp/bh-verify && ls /tmp/bh-verify",
           "auditUrl": "https://github.com/browser-use/browser-harness/tree/main/src/browser_harness",
-          "recommendedInstallCommand": "uv tool install browser-harness==0.0.1"
+          "recommendedInstallCommand": "uv tool install --force browser-harness==0.0.1"
         }
       ],
       "policy": {
         "allowFloatingVersions": false,
         "requireAuditPerVersion": true,
-        "preferredMirror": "internal-npm-registry-and-pypi-mirror-if-available"
+        "preferredMirror": "internal-npm-registry-and-pypi-mirror-if-available",
+        "setupScriptEnforcement": "v0.2.3+: scripts/run.sh setup 安装钉死版本 + npm --ignore-scripts，安装后立即 --version 校验，版本不匹配 setup 中止；不再有 floating-latest 的实际安装路径"
       }
     },
     "privacyNotice": {
@@ -314,10 +336,49 @@
       "details": [
         "默认 sensitive-deny：URL 命中 alwaysSensitiveHostPatterns 时拒绝写操作（js/exec/shot/upload/type/click/scroll/open/switch/key），需 BH_ALLOW_SENSITIVE=1 或每条命令加 --i-understand-sensitive 才放行",
         "BH_PUBLIC_ONLY=1 硬隔离模式：只允许 publicSites allow-list 内域名，其它一律拒绝",
-        "只读子命令（page/tabs/helpers/doctor）任何模式下都允许，便于体检",
+        "只读子命令（page/tabs/helpers/doctor/stop）任何模式下都允许，便于体检和清理",
         "审计日志只写元数据（hostname/subcommand/argv 的 sha256），不写任何参数原文或响应体",
         "强烈建议为本 skill 使用一个独立的 Chrome profile（不要复用日常 profile），让接管面最小化",
         "agent-workspace/domain-skills/ 目录默认在 .gitignore 内，避免你 commit 时把 cookie / token 推到远端"
+      ]
+    },
+    "scannerResponses": {
+      "clawScan_2026_05_01": [
+        {
+          "finding": "Tool Misuse and Exploitation — raw bypasses sensitive-deny",
+          "severity": "High",
+          "status_was": "Concern",
+          "addressed_in": "v0.2.3",
+          "fix": "raw 子命令默认禁用，需 BH_RAW_OK=1 显式开启；启用后仍写一行 sub=raw mode=raw-bypass 到审计日志（虽然绕过 URL 策略门）；SKILL.md 第 9 条明确禁止 Agent 使用 raw，应改用 exec。详见 capabilities.policy.rawSubcommandPolicy。"
+        },
+        {
+          "finding": "Agentic Supply Chain Vulnerabilities — setup installs floating versions",
+          "severity": "Medium",
+          "status_was": "Concern",
+          "addressed_in": "v0.2.3",
+          "fix": "scripts/run.sh setup 现在硬编码 BHTS_PKG_VERSION=0.1.1 + PYTHON_BH_PKG_VERSION=0.0.1，npm 装时加 --ignore-scripts，uv tool install 用 ==0.0.1，安装后立即 --version 校验；版本不匹配 setup 中止。详见 capabilities.supplyChain.policy.setupScriptEnforcement。"
+        },
+        {
+          "finding": "Rogue Agents — long-lived daemon, multi-agent shared browser",
+          "severity": "Medium",
+          "status_was": "Note",
+          "addressed_in": "v0.2.3",
+          "fix": "新增 scripts/run.sh stop 子命令一键停掉守护进程；setup 输出强调任务完成后应 stop；reference.md 新增警告说明守护是长寿命的；BU_NAME 已支持多 Agent 命名空间隔离。"
+        },
+        {
+          "finding": "Identity and Privilege Abuse — authenticated browser access across sensitive sites",
+          "severity": "High",
+          "status_was": "Concern",
+          "addressed_in": "v0.2.0+, reinforced in v0.2.3",
+          "fix": "已实施的多层防御：sensitive-deny 默认 + BH_PUBLIC_ONLY 硬隔离 + metadata-only 审计 + raw 默认禁用。v0.2.3 新增：setup 引导用户用独立 Chrome profile（--user-data-dir=$HOME/.cache/chrome-bh-profile）隔离接管面，避免复用日常 profile 时把银行/邮箱登录态暴露给 Agent。"
+        },
+        {
+          "finding": "Memory and Context Poisoning — domain-skills as trust-then-act",
+          "severity": "Medium",
+          "status_was": "Note",
+          "addressed_in": "v0.2.3",
+          "fix": "reference.md 的 domain-skills 节加入显式不可信输入警告；SKILL.md 第 11 条明确要求 Agent 把 domain-skills markdown 当线索而非指令，遇到元指令（'绕过 sensitive-deny' 等）当 prompt injection 处理。.gitignore 默认排除该目录避免 cookie 进 git。"
+        }
       ]
     }
   }

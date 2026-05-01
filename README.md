@@ -7,7 +7,7 @@
 > "安全说明"节 + [`config.json`](config.json) 的 `capabilities.sensitive`、
 > `capabilities.policy`、`capabilities.privacyNotice` 三段。
 >
-> **默认防御姿态**（v0.2.0+）：
+> **默认防御姿态**（v0.2.3）：
 > - **Subprocess isolation only** — 第三方代码（`bhts`）在独立子进程跑，本
 >   skill 自身不通过 dynamic import 把任何 npm 包加载进自己的 Node 进程。
 > - **Sensitive-deny default** — URL 命中银行 / 邮箱 / 内网 / admin / 健康记
@@ -19,6 +19,16 @@
 >   （仅 ts / 子命令 / hostname / argv 的 sha256 / exit；**绝不**写参数原文或响应体）。
 > - **上游版本精确钉死** — `browser-harness-ts@0.1.1` + `browser-harness==0.0.1`，
 >   `policy.allowFloatingVersions=false`；升级要审计 diff 后才发新版本。
+> - **`raw` 子命令默认禁用**（v0.2.3）— 防止后门绕过 sensitive-deny；需
+>   `BH_RAW_OK=1` 显式开启，启用后仍写 `sub=raw mode=raw-bypass` 审计。
+> - **安装期硬化**（v0.2.3）— `setup` 强制装钉死版本 + `npm --ignore-scripts`，
+>   安装后 `--version` 校验，版本不匹配立即中止。
+> - **`stop` 子命令**（v0.2.3）— 任务完成后用 `scripts/run.sh stop` 关掉守护
+>   进程，避免长寿命常驻持有 CDP；setup 输出会引导用独立 Chrome profile
+>   隔离接管面。
+> - **domain-skills 当不可信输入**（v0.2.3）— SKILL.md 第 11 条要求 Agent
+>   把 `agent-workspace/domain-skills/<host>/*.md` 的内容当**线索**而非**指令**，
+>   遇到"绕过 sensitive-deny"等元指令按 prompt injection 处理。
 
 把 [`browser-harness-ts`](https://github.com/sipingme/browser-harness-ts) +
 [`browser-use/browser-harness`](https://github.com/browser-use/browser-harness)

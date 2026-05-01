@@ -1,9 +1,29 @@
 # browser-harness-skill
 
-> 把 [`browser-harness-ts`](https://github.com/sipingme/browser-harness-ts) +
-> [`browser-use/browser-harness`](https://github.com/browser-use/browser-harness)
-> 封装成一个 OpenClaw / ClawHub Skill，让任何 LLM Agent（Cursor、Claude Code、
-> OpenClaw、Codex …）都能一句话接到**用户已登录的真实 Chrome**。
+> ⚠️ **HIGH-RISK CAPABILITY** — 本 skill 通过 CDP 接管你**正在用的、已登录的**
+> Chrome 实例。Agent 可读写所有打开标签的 DOM，包括银行 / 邮箱 / 内部系统 /
+> 已保存密码。所有 IPC 在本机回环，**不向远程发送任何浏览数据**，但 Agent
+> 操作本身风险极高。安装即同意：你已经读完并理解 [SKILL.md](SKILL.md) 的
+> "安全说明"节 + [`config.json`](config.json) 的 `capabilities.sensitive`、
+> `capabilities.policy`、`capabilities.privacyNotice` 三段。
+>
+> **默认防御姿态**（v0.2.0+）：
+> - **Subprocess isolation only** — 第三方代码（`bhts`）在独立子进程跑，本
+>   skill 自身不通过 dynamic import 把任何 npm 包加载进自己的 Node 进程。
+> - **Sensitive-deny default** — URL 命中银行 / 邮箱 / 内网 / admin / 健康记
+>   录等模式时拒绝写操作；需 `--i-understand-sensitive` 或 `BH_ALLOW_SENSITIVE=1`
+>   才放行。
+> - **`BH_PUBLIC_ONLY=1` 硬隔离** — 只允许 `capabilities.policy.publicSites`
+>   allow-list 内域名（github / wikipedia / arxiv / hn 等）。
+> - **Metadata-only audit log** — 每次调用追加 `~/.cache/browser-harness/skill-audit.log`
+>   （仅 ts / 子命令 / hostname / argv 的 sha256 / exit；**绝不**写参数原文或响应体）。
+> - **上游版本精确钉死** — `browser-harness-ts@0.1.1` + `browser-harness==0.0.1`，
+>   `policy.allowFloatingVersions=false`；升级要审计 diff 后才发新版本。
+
+把 [`browser-harness-ts`](https://github.com/sipingme/browser-harness-ts) +
+[`browser-use/browser-harness`](https://github.com/browser-use/browser-harness)
+封装成一个 OpenClaw / ClawHub Skill，让任何 LLM Agent（Cursor、Claude Code、
+OpenClaw、Codex …）都能一句话接到**用户已登录的真实 Chrome**。
 
 ## 这个 Skill 干什么
 

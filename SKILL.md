@@ -1,7 +1,7 @@
 ---
 name: browser-harness
-version: 0.1.0
-description: 用 LLM 友好的方式控制用户已登录的真实 Chrome（CDP）。一行命令在当前标签页跑 JS、点击、滚动、截图、读 DOM、填表、上传文件——共享 cookie/session/登录态，跨 Python 与 TypeScript Agent 操作同一个浏览器。基于 browser-use/browser-harness（Python 守护进程）+ browser-harness-ts（TS 客户端 + bhts CLI）。
+version: 0.2.0
+description: 用 LLM 友好的方式控制用户已登录的真实 Chrome（CDP）。一行命令在当前标签页跑 JS、点击、滚动、截图、读 DOM、填表、上传文件——共享 cookie/session/登录态，跨 Python 与 TypeScript Agent 操作同一个浏览器。基于 browser-use/browser-harness（Python 守护进程）+ browser-harness-ts（TS 客户端 + bhts CLI）。HIGH-RISK 能力：默认 sensitive-deny（银行/邮箱/内网/admin 模式拒绝写操作）、可选 BH_PUBLIC_ONLY 硬隔离、metadata-only 审计日志、subprocess 隔离不做 in-process import、上游版本精确钉死。
 author: Ping Si <sipingme@gmail.com>
 tags: [browser, automation, chrome, cdp, agent, llm, scraping, devtools-protocol, browser-use]
 requiredEnvVars: []
@@ -40,6 +40,7 @@ requiredEnvVars: []
 5. **写域知识，不要写"我做过什么"**。每发现一个站点的稳定选择器 / 私有 API / 框架坑，把它写进 `agent-workspace/domain-skills/<host>/*.md`（详见 [reference.md](reference.md) 的 *Domain skills* 节）。**不要**记"我点了第 3 个按钮然后等了 2 秒"——那是日记不是地图。
 6. **永不**把 cookie / token / session id / 登录密码写进 domain-skills 文件——这些目录会进 git。
 7. **CDP 调用是裸协议，没有自动重试**。网络抖动 / 标签被关 / Chrome 升级时调用会立即抛错；把错误**原文**报告给用户而不是默默吞掉。
+8. **遇到 `DENY (...)` 错误退出码 7，永远不要替用户加 `--i-understand-sensitive` 或 `BH_ALLOW_SENSITIVE=1`**。把拒绝原因 + 命中模式**原文**贴给用户，让用户**亲口**确认是否是他授权的敏感操作；用户授权后再重跑命令并附上 flag。
 
 ### 错误恢复对照
 
@@ -50,6 +51,8 @@ requiredEnvVars: []
 | `JavaScript evaluation failed: ReferenceError: ...` | snippet 引用了页面上不存在的变量；先用 `js 'document.title'` 类的简单语句确认上下文，再补全 |
 | `no element for <selector>` | 选择器不在当前 DOM。先 `js 'document.querySelectorAll("...").length'` 检查，再考虑 iframe（用 `bh.iframeTarget(...)`） |
 | 任何 `Target ... not found` | 标签页关闭或刷新后 sessionId 失效；调 `bh.ensureRealTab()` 重新附着 |
+| `DENY (default-allowed): <host> 命中 sensitive 模式 ...` | 命中默认拒绝列表（银行/邮箱/内网/admin）。把原文贴给用户，等用户确认后重跑加 `--i-understand-sensitive` |
+| `DENY (public-allowed-only-mode): BH_PUBLIC_ONLY=1 模式下 <host> 不在 allow-list` | 用户开了硬隔离。要么换站点（在 publicSites 内），要么用户解除 `unset BH_PUBLIC_ONLY` |
 
 ## 配合 domain-skills 工作（必看）
 
@@ -145,8 +148,78 @@ scripts/run.sh doctor
 
 ## 安全说明
 
-- **本 skill 不发送任何浏览数据到远程**——所有 CDP 流量在本机 Chrome ↔ 本机 Python 守护进程 ↔ 本机 Node 客户端之间。
-- **AI 看到的就是用户当前的浏览器**：登录态、cookie、history、saved password 全部对 AI 可见。涉及敏感页面（银行 / 邮箱 / 内部系统）前必须**显式确认用户授权**，并优先用 `js` 只读取明确字段而非整页 dump。
-- **截图同理**：`shot` 命令会把当前页面 PNG 写到本地路径；不要把它上传到任何远程服务（包括日志/分析平台）除非用户授权。
-- **守护进程监听本机 socket**（默认 `~/.cache/browser-harness/<name>.sock` 或 Windows TCP loopback）——不接受远程连接。
-- **多用户机器**：守护进程的 socket 权限默认 600，但 Chrome CDP 端口（9222）默认 listen on `127.0.0.1`，本机其他用户可以接管。共享机器请额外审计。
+> 这个 skill 是 HIGH-RISK 类。请把本节当作合同——不读完不要用。
+
+### 本 skill 不做什么
+
+- 不向任何远程发送浏览数据。所有 CDP 流量在本机 Chrome ↔ 本机 Python 守护进程 ↔ 本机 Node 客户端之间。
+- 不在自己的 Node 进程内 dynamic import 任何第三方包。`bhts` 总是作为独立**子进程**通过 `spawn()` 启动；包内代码无法读到本 skill 进程的内存或 env。
+- 不接受远程连接。守护进程监听本机 socket（`~/.cache/browser-harness/<name>.sock`，Windows fallback 到 TCP loopback），权限 0600。
+- 不写参数或响应原文到磁盘——审计日志只记 metadata（hostname / argv 的 sha256 / exit code）。
+
+### 默认防御姿态（v0.2.0+）
+
+每条**写命令**（js/exec/shot/upload/type/click/scroll/open/key）执行前会先读
+当前标签 url，过两层策略：
+
+1. **`BH_PUBLIC_ONLY=1` 硬隔离模式**（最严，优先级最高）
+   只放行 `config.json` 里 `capabilities.policy.publicSites` allow-list 的域名
+   （github、wikipedia、arxiv、hn、stackoverflow、bbc 之类）。其它一律拒绝。
+   适合：让 LLM Agent 跑公开抓取 / 信息查询，禁止它碰任何账户态。
+
+2. **Sensitive-deny 默认**（中等，默认开）
+   url 命中以下任一模式时拒绝写操作：
+
+   - `\b(bank|paypal|alipay|stripe|wepay|wechat[-_.]?pay|payment)\b`
+   - `\b(gmail|outlook|hotmail|protonmail|webmail|qq\.com\/mail|139\.com|163\.com\/mail)\b`
+   - `\.(internal|intranet|corp|local|lan)(:|\/|$)`
+   - `\b(admin|dashboard|console|wp-admin|cpanel|phpmyadmin)\b`
+   - `^https?:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)`
+   - `\b(ehr|emr|patient|hipaa|medical-record|hospital)\b`
+
+   解除方法（单次）：命令尾加 `--i-understand-sensitive`。
+   解除方法（会话级）：`export BH_ALLOW_SENSITIVE=1`。
+
+3. **只读子命令豁免**：`page` / `tabs` / `helpers` / `doctor` 不过策略，方便体检。
+
+4. **内部 URL 豁免**：`chrome://` / `about:` / `devtools://` 等总是放行。
+
+### 审计日志
+
+每次写命令都向 `~/.cache/browser-harness/skill-audit.log` 追加一行（mode 0600）：
+
+```
+ts=2026-05-01T08:50:00.000Z sub=open host=github.com mode=default-allowed denied=0 exit=0 argv_sha256=ab12cd34
+```
+
+**只有 metadata**：时间、子命令名、hostname、命中策略、是否被拒、退出码、整个 argv 的 sha256 截断 16 字符。
+**绝不**写参数原文（你的 `js 'document.title'` 不会出现在日志里）；**绝不**写响应体；**绝不**写 cookie / DOM 内容。
+
+禁用：`export BH_AUDIT_LOG=` （置空字符串）。
+换路径：`export BH_AUDIT_LOG=/path/to/your.log`。
+
+### 上游版本钉死
+
+| 包 | 钉死版本 | 审计入口 |
+|---|---|---|
+| `browser-harness-ts` (npm) | `0.1.1` | https://github.com/sipingme/browser-harness-ts/blob/v0.1.1/src/harness.ts |
+| `browser-harness` (PyPI) | `0.0.1` | https://github.com/browser-use/browser-harness/tree/main/src/browser_harness |
+
+`config.json.capabilities.supplyChain.policy.allowFloatingVersions = false`——
+本 skill 的每个 release 必须**审计上游 diff** 后再 bump。
+
+### 多用户机器
+
+- 守护进程 socket 权限 0600，仅当前 uid 可见。
+- 但 Chrome CDP 端口（默认 9222）listen 在 `127.0.0.1`，**本机其他用户可以接管**。
+  共享机器上若担心邻居：用 `--remote-debugging-pipe`（不开 TCP）启动 Chrome，
+  或干脆别在共享机器上用本 skill。
+
+### Agent 行为约束
+
+- 任何敏感页面（银行 / 邮箱 / 内部系统）操作前**必须取得用户显式授权**，
+  优先用 `js` 只读取明确字段而非整页 dump。
+- 永远不要替用户在命令上加 `--i-understand-sensitive` 或在 env 里设 `BH_ALLOW_SENSITIVE=1`——
+  那是用户的决策权，不是 Agent 的。
+- 截图（`shot`）会把当前页面 PNG 写到本地；不要把它上传到任何远程服务
+  （包括日志 / 分析平台）除非用户授权。

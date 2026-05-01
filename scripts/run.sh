@@ -33,11 +33,12 @@ fail()  { printf "\033[1;31mERR\033[0m %s\n" "$*" >&2; exit 1; }
 
 show_help() {
   cat <<'EOF'
-browser-harness skill v0.1.0
+browser-harness skill v0.2.0
 ==> 让 LLM Agent 通过 CDP 接管用户已登录的真实 Chrome
+==> 默认 sensitive-deny + 元数据审计日志 + 可选 BH_PUBLIC_ONLY 硬隔离
 
 用法:
-  scripts/run.sh <subcommand> [args]
+  scripts/run.sh <subcommand> [args] [--i-understand-sensitive]
 
 子命令:
   setup                          一次性安装 + 引导接管 Chrome
@@ -45,11 +46,11 @@ browser-harness skill v0.1.0
 
   js   '<expr>'                  在当前标签跑一段 JS，返回 JSON 结果
   exec '<snippet>'               跑任意 bhts -c snippet（bh / h 已就绪）
-  raw  -c '<snippet>' ...        透传到 bhts，传任意 bhts 参数
+  raw  -c '<snippet>' ...        透传到 bhts，传任意 bhts 参数（绕过 sensitive-deny）
 
-  page                           当前页 url/title/viewport/scroll/pageSize
-  tabs                           列出真实标签
-  open '<url>'                   新建标签 + waitForLoad
+  page                           当前页 url/title/viewport/scroll/pageSize（只读，免检）
+  tabs                           列出真实标签（只读，免检）
+  open '<url>'                   新建标签 + waitForLoad（URL 过 sensitive-deny 检查）
   switch '<keyword>'             切到 url/title 含关键词的标签
   shot [--full] [path]           截图（默认 ./shot.png）
 
@@ -62,15 +63,25 @@ browser-harness skill v0.1.0
   helpers                            列已注册的自定义 helpers
   help                               本帮助
 
+每命令开关:
+  --i-understand-sensitive       本次允许操作匹配 alwaysSensitiveHostPatterns
+                                 的页面（银行/邮箱/内网/admin 等）。
+                                 等价于 BH_ALLOW_SENSITIVE=1 但只对当前命令生效。
+
 环境变量:
   BU_NAME             守护进程命名空间，默认 default（多 Agent 并行用）
   BH_AGENT_WORKSPACE  agent-workspace 目录覆盖
+  BH_ALLOW_SENSITIVE  =1 全局允许敏感站点（不推荐；优先用 --i-understand-sensitive）
+  BH_PUBLIC_ONLY      =1 硬隔离模式：仅允许 publicSites allow-list 内域名
+  BH_AUDIT_LOG        覆盖审计日志路径（默认 ~/.cache/browser-harness/skill-audit.log；
+                      置空字符串可禁用）
 
 依赖:
   node >= 20.6.0、python >= 3.10、uv、bhts、browser-harness（PATH）
   缺什么 `scripts/run.sh setup` 会指引安装
 
 详细 API: ./reference.md   常见任务: ./examples.md   安装: ./setup.md
+安全策略 / 审计 / 默认拒绝模式: ./SKILL.md 的"安全说明"节
 EOF
 }
 

@@ -1,6 +1,6 @@
 ---
 name: browser-harness
-version: 0.2.0
+version: 0.2.1
 description: 用 LLM 友好的方式控制用户已登录的真实 Chrome（CDP）。一行命令在当前标签页跑 JS、点击、滚动、截图、读 DOM、填表、上传文件——共享 cookie/session/登录态，跨 Python 与 TypeScript Agent 操作同一个浏览器。基于 browser-use/browser-harness（Python 守护进程）+ browser-harness-ts（TS 客户端 + bhts CLI）。HIGH-RISK 能力：默认 sensitive-deny（银行/邮箱/内网/admin 模式拒绝写操作）、可选 BH_PUBLIC_ONLY 硬隔离、metadata-only 审计日志、subprocess 隔离不做 in-process import、上游版本精确钉死。
 author: Ping Si <sipingme@gmail.com>
 tags: [browser, automation, chrome, cdp, agent, llm, scraping, devtools-protocol, browser-use]

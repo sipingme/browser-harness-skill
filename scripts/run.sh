@@ -33,7 +33,7 @@ fail()  { printf "\033[1;31mERR\033[0m %s\n" "$*" >&2; exit 1; }
 
 show_help() {
   cat <<'EOF'
-browser-harness skill v0.2.0
+browser-harness skill v0.2.1
 ==> 让 LLM Agent 通过 CDP 接管用户已登录的真实 Chrome
 ==> 默认 sensitive-deny + 元数据审计日志 + 可选 BH_PUBLIC_ONLY 硬隔离
 

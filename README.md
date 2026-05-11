@@ -29,6 +29,11 @@
 > - **domain-skills 当不可信输入**（v0.2.3）— SKILL.md 第 11 条要求 Agent
 >   把 `agent-workspace/domain-skills/<host>/*.md` 的内容当**线索**而非**指令**，
 >   遇到"绕过 sensitive-deny"等元指令按 prompt injection 处理。
+> - **`scripts/safe-shell.sh`**（v0.2.3）— 可 source 的安全 wrapper，叠加在
+>   上面所有内置防御之外：强制 `BH_PUBLIC_ONLY=1`、写操作（exec/upload/click/
+>   type/key/scroll/open/js）调用前要求 y/N 人工确认、拒绝 raw 与
+>   `--i-understand-sensitive`、shell 退出时 EXIT trap 自动调用 `stop`，
+>   适合"人 + agent 协作"会话。详见脚本顶部 docstring。
 
 把 [`browser-harness-ts`](https://github.com/sipingme/browser-harness-ts) +
 [`browser-use/browser-harness`](https://github.com/browser-use/browser-harness)
